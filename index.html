@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a1628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Photo Report Generator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230a1628'/%3E%3Ctext x='50' y='68' font-size='52' text-anchor='middle'%3E%F0%9F%93%B7%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f3f5f8; --card:#fff; --ink:#111827; --muted:#6b7280; --line:#e5e7eb;
+    --brand:#0a1628; --accent:#2563eb; --accent-ink:#fff; --danger:#dc2626; --ok:#16a34a;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+  header{background:var(--brand);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 18px 14px;position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
+  header .count{font-size:13px;opacity:.8;white-space:nowrap}
+  main{max-width:720px;margin:0 auto;padding:16px 14px calc(120px + env(safe-area-inset-bottom))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+  label.lbl{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+  input[type=text],select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+  input[type=text]:focus,select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+  .row{display:flex;gap:10px;align-items:end}
+  .row>*{flex:1}
+  .row>.w-auto{flex:0 0 auto}
+  button{font:inherit;border:0;border-radius:10px;padding:11px 14px;cursor:pointer;background:#eef2f7;color:var(--ink);font-weight:600;-webkit-tap-highlight-color:transparent}
+  button:active{transform:translateY(1px)}
+  button.primary{background:var(--accent);color:var(--accent-ink)}
+  button.big{width:100%;padding:15px;font-size:17px;border-radius:12px}
+  button.ghost{background:transparent;color:var(--accent);padding:6px 8px}
+  button.danger{color:var(--danger);background:#fef2f2}
+  button:disabled{opacity:.5;cursor:default}
+  .hint{font-size:13px;color:var(--muted);margin-top:8px}
+  .empty{text-align:center;color:var(--muted);padding:34px 10px;font-size:15px}
+  .empty .big-ico{font-size:44px;margin-bottom:6px}
+
+  .group{padding:12px}
+  .group-head{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .group-head .num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+  .group-head input{flex:1;font-weight:600}
+  .group-tools{display:flex;gap:4px;flex:0 0 auto}
+  .group-tools button{padding:6px 9px;font-size:15px;line-height:1}
+  .thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .thumb{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#dfe3ea}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb .idx{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:2px 6px;border-radius:999px}
+  .thumb .acts{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:18px 4px 4px}
+  .thumb .acts button{background:rgba(255,255,255,.92);padding:5px 8px;font-size:13px;border-radius:8px;line-height:1}
+  .thumb .acts button.del{color:var(--danger)}
+  .warn{font-size:12px;color:#b45309;margin-top:6px}
+
+  .fab{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:5}
+  .fab .inner{max-width:720px;margin:0 auto;display:flex;gap:10px}
+  .fab .inner>*{flex:1}
+  .progress{height:6px;background:var(--line);border-radius:999px;overflow:hidden;margin-top:10px;display:none}
+  .progress>i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+  .status{font-size:13px;color:var(--muted);margin-top:6px;min-height:18px}
+  .done{background:#f0fdf4;border-color:#bbf7d0}
+  .done .fname{font-weight:650;word-break:break-all}
+  .done .btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .done .btns button{flex:1}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:20px 0 0}
+  dialog{border:0;border-radius:16px;padding:0;max-width:92vw;width:420px}
+  dialog::backdrop{background:rgba(0,0,0,.4)}
+  dialog .dlg{padding:18px}
+  dialog h3{margin:0 0 8px;font-size:17px}
+  dialog p{margin:0 0 12px;color:var(--muted);font-size:14px}
+  dialog .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+  textarea{width:100%;font:inherit;font-size:14px;padding:10px;border:1px solid var(--line);border-radius:10px;min-height:180px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📷 Photo Report Generator</h1>
+  <span class="count" id="hdrCount">0 photos</span>
+</header>
+
+<main>
+  <div class="card">
+    <label class="lbl" for="reportName">Report name (file name)</label>
+    <input type="text" id="reportName" placeholder="e.g. DAB Buzzer Alert System - Jul 2026" autocomplete="off">
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label class="lbl" for="perGroup">Photos per section</label>
+        <select id="perGroup">
+          <option value="3">3 photos (2 top + 1 below)</option>
+          <option value="6">6 photos (3 + 3, smaller)</option>
+        </select>
+      </div>
+      <div class="w-auto">
+        <button id="btnPresets" title="Edit the title list">Title list</button>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="big primary" id="btnAdd">＋ Add photos</button>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      <div class="hint">Select photos in the order they were taken. Every <b id="perGroupHint">3</b> photos become one section. You can move photos between sections afterwards.</div>
+    </div>
+  </div>
+
+  <div id="groups"></div>
+  <div class="empty" id="empty">
+    <div class="big-ico">🗂️</div>
+    No photos yet. Tap <b>Add photos</b> to start.
+  </div>
+
+  <div class="card done" id="doneCard" hidden>
+    <div>✅ Report ready</div>
+    <div class="fname" id="doneName"></div>
+    <div class="btns">
+      <button class="primary" id="btnDownload">⬇️ Download</button>
+      <button id="btnShare" hidden>📤 Share</button>
+    </div>
+    <div class="hint">On iPhone, Download opens a preview. Use the share icon there to save to Files or send on WhatsApp.</div>
+  </div>
+
+  <footer>Sections: one page each · A4 · Word (.docx)</footer>
+</main>
+
+<div class="fab">
+  <div class="inner">
+    <button id="btnClear" class="danger" style="flex:0 0 auto">Clear</button>
+    <button id="btnAuto" title="Number the sections after the first one automatically">Auto-number titles</button>
+    <button id="btnGenerate" class="primary">Generate Word</button>
+  </div>
+  <div class="progress" id="progress"><i></i></div>
+  <div class="status" id="status"></div>
+</div>
+
+<datalist id="titleList"></datalist>
+
+<dialog id="presetDlg">
+  <div class="dlg">
+    <h3>Title list</h3>
+    <p>One title per line. These appear as suggestions when you type a section title.</p>
+    <textarea id="presetText"></textarea>
+    <div class="btns">
+      <button id="presetReset">Reset to default</button>
+      <button id="presetCancel">Cancel</button>
+      <button class="primary" id="presetSave">Save</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js"></script>
+<script>
+(function(){
+  'use strict';
+  // ---------- config ----------
+  const DEFAULT_PRESETS = [
+    ...[1,2,3,4,5].map(n=>`Arrival Bus Lane ${n}`),
+    ...[1,2,3,4,5].map(n=>`Departure Bus Lane ${n}`),
+    ...[1,2,3,4,5,6].map(n=>`Arrival Lorry Lane ${n}`),
+    ...[1,2,3,4,5,6].map(n=>`Departure Lorry Lane ${n}`),
+    ...[7,8,9,10].map(n=>`OWC Lorry ${n}`),
+    ...[1,2,3,4,5].map(n=>`Arrival Bus Booth ${n} Exit`),
+  ];
+  // Layout measured from the original document (inches)
+  const LAYOUT = {
+    3: { w: 2.90, h: 3.87, perRow: 2 },   // 2 on the first row, 1 on the second
+    6: { w: 2.05, h: 2.73, perRow: 3 },   // 3 per row, two rows
+  };
+  const MAX_PX = { w: 1200, h: 1600 };
+
+  // ---------- state ----------
+  let groups = [];          // [{title, photos:[{file,url,id}]}]
+  let lastBlob = null, lastName = '';
+  let uid = 0;
+
+  const $ = s => document.querySelector(s);
+  const store = {
+    get(k, d){ try{ const v = localStorage.getItem(k); return v==null? d : JSON.parse(v);}catch(e){ return d; } },
+    set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+  };
+
+  // ---------- presets ----------
+  function presets(){ return store.get('presets', DEFAULT_PRESETS); }
+  function renderPresets(){
+    $('#titleList').innerHTML = presets().map(t=>`<option value="${esc(t)}">`).join('');
+  }
+  $('#btnPresets').onclick = ()=>{ $('#presetText').value = presets().join('\n'); $('#presetDlg').showModal(); };
+  $('#presetCancel').onclick = ()=> $('#presetDlg').close();
+  $('#presetReset').onclick = ()=> $('#presetText').value = DEFAULT_PRESETS.join('\n');
+  $('#presetSave').onclick = ()=>{
+    const list = $('#presetText').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    store.set('presets', list); renderPresets(); $('#presetDlg').close();
+  };
+
+  // ---------- helpers ----------
+  function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function perGroup(){ return parseInt($('#perGroup').value,10); }
+  function totalPhotos(){ return groups.reduce((n,g)=>n+g.photos.length,0); }
+  function setStatus(msg){ $('#status').textContent = msg || ''; }
+  function setProgress(p){ const el=$('#progress'); el.style.display = p==null?'none':'block'; if(p!=null) el.firstElementChild.style.width = Math.round(p*100)+'%'; }
+
+  // ---------- add photos ----------
+  $('#btnAdd').onclick = ()=> $('#fileInput').click();
+  $('#fileInput').addEventListener('change', e=>{ addFiles(Array.from(e.target.files||[])); e.target.value=''; });
+
+  function addFiles(files){
+    files = files.filter(f=>/^image\//.test(f.type) || /\.(jpe?g|png|heic|webp)$/i.test(f.name));
+    if(!files.length) return;
+    const n = perGroup();
+    // fill the last group if it is short, then chunk the rest
+    let last = groups[groups.length-1];
+    for(const f of files){
+      if(!last || last.photos.length >= n){ last = {title:'', photos:[]}; groups.push(last); }
+      last.photos.push({file:f, url:URL.createObjectURL(f), id:++uid});
+    }
+    render();
+  }
+  window.__app = { addFiles, get groups(){ return groups; }, generate, setTitles(list){ list.forEach((t,i)=>{ if(groups[i]) groups[i].title=t; }); render(); } };
+
+  // ---------- render ----------
+  function render(){
+    const host = $('#groups');
+    $('#empty').hidden = groups.length>0;
+    $('#hdrCount').textContent = `${totalPhotos()} photos · ${groups.length} sections`;
+    $('#perGroupHint').textContent = perGroup();
+    host.innerHTML = groups.map((g,gi)=>`
+      <div class="card group" data-g="${gi}">
+        <div class="group-head">
+          <span class="num">${gi+1}</span>
+          <input type="text" list="titleList" placeholder="Section title, e.g. Arrival Bus Lane 1" value="${esc(g.title)}" data-title="${gi}" autocomplete="off">
+          <div class="group-tools">
+            <button data-act="up" data-g="${gi}" title="Move section up" ${gi===0?'disabled':''}>▲</button>
+            <button data-act="down" data-g="${gi}" title="Move section down" ${gi===groups.length-1?'disabled':''}>▼</button>
+            <button data-act="delg" data-g="${gi}" title="Remove section" class="danger">✕</button>
+          </div>
+        </div>
+        <div class="thumbs">
+          ${g.photos.map((p,pi)=>`
+            <div class="thumb">
+              <img src="${p.url}" alt="">
+              <span class="idx">${pi+1}</span>
+              <div class="acts">
+                <button data-act="prev" data-g="${gi}" data-p="${pi}" title="Move to previous section">◀</button>
+                <button data-act="delp" data-g="${gi}" data-p="${pi}" class="del" title="Remove photo">✕</button>
+                <button data-act="next" data-g="${gi}" data-p="${pi}" title="Move to next section">▶</button>
+              </div>
+            </div>`).join('')}
+        </div>
+        ${g.photos.length!==3 && g.photos.length!==6 ? `<div class="warn">⚠️ ${g.photos.length} photo${g.photos.length===1?'':'s'} in this section. Layout uses 3 (2 + 1) or 6 (3 + 3); other counts still work but will look different.</div>`:''}
+      </div>`).join('');
+  }
+
+  $('#groups').addEventListener('input', e=>{
+    const t = e.target.dataset.title; if(t!=null){ groups[+t].title = e.target.value; }
+  });
+  $('#groups').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    const act=b.dataset.act, gi=+b.dataset.g, pi=+b.dataset.p;
+    if(act==='delg'){ if(groups[gi].photos.length && !confirm('Remove this section and its photos?')) return; groups.splice(gi,1); }
+    else if(act==='up' && gi>0){ [groups[gi-1],groups[gi]]=[groups[gi],groups[gi-1]]; }
+    else if(act==='down' && gi<groups.length-1){ [groups[gi+1],groups[gi]]=[groups[gi],groups[gi+1]]; }
+    else if(act==='delp'){ groups[gi].photos.splice(pi,1); }
+    else if(act==='prev'){
+      const [p]=groups[gi].photos.splice(pi,1);
+      if(gi===0){ groups.unshift({title:'',photos:[p]}); } else groups[gi-1].photos.push(p);
+    }
+    else if(act==='next'){
+      const [p]=groups[gi].photos.splice(pi,1);
+      if(gi===groups.length-1){ groups.push({title:'',photos:[p]}); } else groups[gi+1].photos.unshift(p);
+    }
+    groups = groups.filter(g=>g.photos.length>0 || g.title);
+    render();
+  });
+  $('#perGroup').addEventListener('change', ()=>{ store.set('perGroup', perGroup()); render(); });
+  $('#reportName').addEventListener('input', e=> store.set('reportName', e.target.value));
+
+  $('#btnClear').onclick = ()=>{
+    if(groups.length && !confirm('Clear all photos and sections?')) return;
+    groups.forEach(g=>g.photos.forEach(p=>URL.revokeObjectURL(p.url)));
+    groups=[]; lastBlob=null; $('#doneCard').hidden=true; setStatus(''); render();
+  };
+
+  // Auto-number: take the first titled section, and for every following section
+  // that is empty, copy the title with the trailing number increased by one.
+  $('#btnAuto').onclick = ()=>{
+    let base=null;
+    for(const g of groups){
+      const m = g.title.trim().match(/^(.*?)(\d+)(\D*)$/);
+      if(g.title.trim() && m){ base = { pre:m[1], n:parseInt(m[2],10), post:m[3] }; continue; }
+      if(!g.title.trim() && base){ base.n++; g.title = `${base.pre}${base.n}${base.post}`; }
+    }
+    if(!base){ alert('Type a title with a number in the first section first, e.g. "Arrival Bus Lane 1".'); return; }
+    render();
+  };
+
+  // ---------- image processing ----------
+  function loadImage(file){
+    return new Promise((res,rej)=>{
+      const img = new Image();
+      img.onload = ()=>res(img);
+      img.onerror = ()=>rej(new Error('Cannot read '+file.name));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+  async function toJpeg(file, ratio){
+    // returns {data:ArrayBuffer} cropped to the target aspect ratio (w/h), max 1200x1600
+    let src, sw, sh, bitmap=null;
+    try{
+      bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      src=bitmap; sw=bitmap.width; sh=bitmap.height;
+    }catch(e){
+      src = await loadImage(file); sw=src.naturalWidth; sh=src.naturalHeight;
+    }
+    let cw=sw, ch=sh, cx=0, cy=0;
+    if(sw/sh > ratio){ cw = Math.round(sh*ratio); cx = Math.round((sw-cw)/2); }
+    else { ch = Math.round(sw/ratio); cy = Math.round((sh-ch)/2); }
+    const scale = Math.min(1, MAX_PX.w/cw, MAX_PX.h/ch);
+    const ow = Math.round(cw*scale), oh = Math.round(ch*scale);
+    const canvas = document.createElement('canvas'); canvas.width=ow; canvas.height=oh;
+    canvas.getContext('2d').drawImage(src, cx, cy, cw, ch, 0, 0, ow, oh);
+    if(bitmap) bitmap.close();
+    const blob = await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.86));
+    return { data: await blob.arrayBuffer(), w: ow, h: oh };
+  }
+
+  // ---------- docx ----------
+  async function generate(){
+    if(!groups.length){ alert('Add some photos first.'); return; }
+    const missing = groups.findIndex(g=>!g.title.trim());
+    if(missing>=0 && !confirm(`Section ${missing+1} has no title. Generate anyway?`)) return;
+    const { Document, Packer, Paragraph, TextRun, ImageRun, PageBreak } = docx;
+    const btn=$('#btnGenerate'); btn.disabled=true; $('#doneCard').hidden=true; lastBlob=null;
+    setProgress(0); setStatus('Preparing photos…');
+    try{
+      const children=[]; const total=totalPhotos(); let done=0;
+      for(let gi=0; gi<groups.length; gi++){
+        const g=groups[gi];
+        const lay = g.photos.length>3 ? LAYOUT[6] : LAYOUT[3];
+        children.push(new Paragraph({ keepNext:true, children:[ new TextRun({ text:g.title.trim(), bold:true, size:28, font:'Calibri' }) ] }));
+        for(let i=0;i<g.photos.length;i+=lay.perRow){
+          const runs=[];
+          for(const p of g.photos.slice(i,i+lay.perRow)){
+            const img = await toJpeg(p.file, lay.w/lay.h);
+            runs.push(new ImageRun({ type:'jpg', data:img.data, transformation:{ width:Math.round(lay.w*96), height:Math.round(lay.h*96) } }));
+            done++; setProgress(done/total); setStatus(`Processing photo ${done} of ${total}…`);
+          }
+          children.push(new Paragraph({ keepNext:true, spacing:{after:0}, children:runs }));
+        }
+        if(gi<groups.length-1) children.push(new Paragraph({ children:[ new PageBreak() ] }));
+      }
+      setStatus('Building Word file…');
+      const doc = new Document({
+        styles:{ default:{ document:{ run:{ font:'Calibri', size:22 } } } },
+        sections:[{ properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:1440, right:1440, bottom:1440, left:1440 } } }, children }]
+      });
+      lastBlob = await Packer.toBlob(doc);
+      lastName = (($('#reportName').value||'').trim() || 'Photo Report') + '.docx';
+      window.__lastBlob = lastBlob; window.__lastName = lastName;
+      $('#doneName').textContent = lastName + ' · ' + (lastBlob.size/1048576).toFixed(1) + ' MB';
+      const canShare = !!(navigator.canShare && navigator.canShare({ files:[new File([lastBlob], lastName, {type:lastBlob.type})] }));
+      $('#btnShare').hidden = !canShare;
+      $('#doneCard').hidden=false; setStatus('Done.'); setProgress(null);
+      $('#doneCard').scrollIntoView({behavior:'smooth', block:'center'});
+    }catch(err){
+      console.error(err); setProgress(null); setStatus('Error: '+(err.message||err)); alert('Could not generate the file: '+(err.message||err));
+    }finally{ btn.disabled=false; }
+  }
+  $('#btnGenerate').onclick = generate;
+
+  $('#btnDownload').onclick = ()=>{
+    if(!lastBlob) return;
+    const a=document.createElement('a'); a.href=URL.createObjectURL(lastBlob); a.download=lastName; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  };
+  $('#btnShare').onclick = async ()=>{
+    if(!lastBlob) return;
+    const f = new File([lastBlob], lastName, { type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    try{ await navigator.share({ files:[f], title:lastName }); }catch(e){ /* user cancelled */ }
+  };
+
+  // ---------- init ----------
+  $('#reportName').value = store.get('reportName','');
+  $('#perGroup').value = String(store.get('perGroup',3));
+  renderPresets(); render();
+})();
+</script>
+</body>
+</html>
