@@ -122,7 +122,7 @@
     </div>
     <div class="drop" id="dropZone" role="button" tabindex="0">
       <div class="drop-ico">⬇️</div>
-      <div><b>Drag all photos here</b>, or click to choose</div>
+      <div id="dropLabel"><b>Drag all photos here</b>, or click to choose</div>
       <div class="hint" style="margin-top:4px">Every <b id="ppHint">3</b> photos become one page. You can also drop photos onto a set below to add them to that set.</div>
     </div>
     <button type="button" id="btnResplit" style="width:100%;margin-top:10px" hidden>Re-split all photos into pages of <span id="ppHint2">3</span></button>
@@ -301,8 +301,8 @@
   const hasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types||[]).includes('Files');
   let dragDepth = 0;
   function clearOver(){ document.querySelectorAll('.over').forEach(el=>el.classList.remove('over')); }
-  function endDrag(){ dragDepth=0; $('#dragVeil').hidden=true; clearOver(); }
-  window.addEventListener('dragenter', e=>{ if(!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('#dragVeil').hidden=false; });
+  function endDrag(){ dragDepth=0; const v=$('#dragVeil'); if(v) v.hidden=true; clearOver(); }
+  window.addEventListener('dragenter', e=>{ if(!hasFiles(e)) return; e.preventDefault(); dragDepth++; const v=$('#dragVeil'); if(v) v.hidden=false; });
   window.addEventListener('dragleave', e=>{ if(!hasFiles(e)) return; dragDepth=Math.max(0,dragDepth-1); if(!dragDepth) endDrag(); });
   window.addEventListener('dragover', e=>{
     if(!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect='copy';
@@ -479,6 +479,7 @@
   };
 
   // ---------- init ----------
+  if(window.matchMedia && matchMedia('(pointer:coarse)').matches){ $('#dropLabel').innerHTML = '<b>Tap to choose all photos</b>'; $('#dragVeil').remove(); }
   $('#reportName').value = store.get('reportName','');
   $('#sortBy').value = store.get('sortBy','name');
   setPerPage(store.get('perPage',3));
