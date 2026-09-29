@@ -58,6 +58,16 @@
   .thumb .ph{width:100%;height:100%;display:grid;place-items:center;text-align:center;font-size:12px;color:var(--muted);padding:6px 6px 30px;line-height:1.3}
   .thumb .ph.err{color:var(--danger);background:#fef2f2}
   .card-title{font-weight:650;margin-bottom:10px}
+  .chips{display:grid;grid-template-columns:repeat(9,1fr);gap:6px}
+  .chips button{padding:11px 0;background:#eef2f7;font-weight:650}
+  .chips button.on{background:var(--accent);color:#fff}
+  .chips.need button{outline:2px solid #f59e0b;outline-offset:-2px}
+  .req{color:#b45309;font-weight:600}
+  .drop.locked{opacity:.6;cursor:not-allowed}
+  .drop.locked:hover{background:#f8fafc;border-color:#c7cdd6}
+  @keyframes nudge{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+  .nudge{animation:nudge .25s 2}
+  @media (max-width:380px){ .chips{gap:4px} }
   .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#eef2f7}
   .seg button{flex:1;border-radius:0;background:transparent;padding:11px 8px;color:var(--muted)}
   .seg button.on{background:var(--accent);color:#fff}
@@ -108,30 +118,26 @@
 
   <div class="card" id="bulkCard">
     <div class="card-title">Add many photos at once</div>
-    <div class="row">
-      <div>
-        <label class="lbl" for="perPage">Photos per page</label>
-        <div class="stepper">
-          <button type="button" id="ppMinus" aria-label="Fewer">−</button>
-          <input type="number" id="perPage" min="1" max="9" value="3" inputmode="numeric">
-          <button type="button" id="ppPlus" aria-label="More">＋</button>
-        </div>
-      </div>
-      <div>
-        <label class="lbl" for="sortBy">Photo order</label>
-        <select id="sortBy">
-          <option value="name">By file name</option>
-          <option value="time">By date (oldest first)</option>
-          <option value="none">As selected / dropped</option>
-        </select>
-      </div>
+    <label class="lbl" id="ppLabel">Photos per page <span class="req" id="ppReq">· choose one</span></label>
+    <div class="chips" id="ppChips" role="group" aria-labelledby="ppLabel">
+      <button type="button" data-n="1">1</button><button type="button" data-n="2">2</button><button type="button" data-n="3">3</button>
+      <button type="button" data-n="4">4</button><button type="button" data-n="5">5</button><button type="button" data-n="6">6</button>
+      <button type="button" data-n="7">7</button><button type="button" data-n="8">8</button><button type="button" data-n="9">9</button>
+    </div>
+    <div style="margin-top:10px">
+      <label class="lbl" for="sortBy">Photo order</label>
+      <select id="sortBy">
+        <option value="name">By file name</option>
+        <option value="time">By date (oldest first)</option>
+        <option value="none">As selected / dropped</option>
+      </select>
     </div>
     <div class="drop" id="dropZone" role="button" tabindex="0">
       <div class="drop-ico">⬇️</div>
       <div id="dropLabel"><b>Drag all photos here</b>, or click to choose</div>
-      <div class="hint" style="margin-top:4px">Every <b id="ppHint">3</b> photos become one page.<span id="dropExtra"> You can also drop photos onto a set below to add them to that set.</span></div>
+      <div class="hint" style="margin-top:4px" id="dropHint"></div>
     </div>
-    <button type="button" id="btnResplit" style="width:100%;margin-top:10px" hidden>Re-split all photos into pages of <span id="ppHint2">3</span></button>
+    <button type="button" id="btnResplit" style="width:100%;margin-top:10px" hidden>Re-split all photos into pages of <span id="ppHint2"></span></button>
     <input type="file" id="bulkInput" accept="image/*,.heic,.heif" multiple hidden>
   </div>
 
@@ -181,7 +187,7 @@
     <div class="hint">On iPhone, Download opens a preview. Use the share icon there to save to Files or send on WhatsApp.</div>
   </div>
 
-  <footer>One set per page · A4 · Word or PDF · <span id="ver">version 6</span></footer>
+  <footer>One set per page · A4 · Word or PDF · <span id="ver">version 7</span></footer>
 </main>
 
 <div class="fab">
@@ -288,14 +294,30 @@
     render();
   }
   // ----- bulk add: many photos, split into pages of N -----
-  function perPage(){ const n = parseInt($('#perPage').value,10); return Math.min(9, Math.max(1, isNaN(n)?3:n)); }
+  let perPageVal = null;   // no default: the user must choose
+  const isTouch = !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+  function perPage(){ return perPageVal; }
   function setPerPage(n){
-    n = Math.min(9, Math.max(1, n||3));
-    $('#perPage').value = n; $('#ppHint').textContent = n; $('#ppHint2').textContent = n; store.set('perPage', n);
+    n = parseInt(n,10);
+    perPageVal = (isNaN(n) || n<1) ? null : Math.min(9, n);
+    document.querySelectorAll('#ppChips button').forEach(b=> b.classList.toggle('on', +b.dataset.n===perPageVal));
+    $('#ppChips').classList.remove('need');
+    $('#ppReq').hidden = perPageVal!=null;
+    $('#ppHint2').textContent = perPageVal==null ? '' : perPageVal;
+    $('#dropZone').classList.toggle('locked', perPageVal==null);
+    $('#dropHint').innerHTML = perPageVal==null
+      ? 'Choose the number of photos per page first.'
+      : `Every <b>${perPageVal}</b> photo${perPageVal===1?'':'s'} become${perPageVal===1?'s':''} one page.` + (isTouch ? '' : ' You can also drop photos onto a set below to add them to that set.');
+    $('#btnResplit').hidden = perPageVal==null || totalPhotos()===0;
   }
-  $('#ppMinus').onclick = ()=> setPerPage(perPage()-1);
-  $('#ppPlus').onclick  = ()=> setPerPage(perPage()+1);
-  $('#perPage').addEventListener('change', ()=> setPerPage(perPage()));
+  function needPerPage(){
+    if(perPageVal!=null) return false;
+    const c=$('#ppChips'); c.classList.add('need'); c.classList.remove('nudge'); void c.offsetWidth; c.classList.add('nudge');
+    c.scrollIntoView({behavior:'smooth', block:'center'});
+    setStatus('Choose the number of photos per page first.');
+    return true;
+  }
+  $('#ppChips').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b){ setPerPage(b.dataset.n); setStatus(''); } });
   $('#sortBy').addEventListener('change', e=> store.set('sortBy', e.target.value));
 
   // ----- HEIC (iPhone format): most browsers cannot decode it, so convert to JPEG in the browser -----
@@ -339,6 +361,7 @@
     return arr;
   }
   function addBulk(files){
+    if(needPerPage()) return 0;
     files = sortFiles(files.filter(isImage));
     if(!files.length) return 0;
     const n = perPage();
@@ -351,6 +374,7 @@
     return files.length;
   }
   function resplit(){
+    if(needPerPage()) return;
     const n = perPage(), all = groups.flatMap(g=>g.photos), titles = groups.map(g=>g.title);
     if(!all.length) return;
     const out=[];
@@ -361,8 +385,8 @@
     if(!confirm(`Re-split all ${totalPhotos()} photos into pages of ${perPage()}? Titles stay in order.`)) return;
     resplit();
   };
-  $('#dropZone').onclick = ()=> $('#bulkInput').click();
-  $('#dropZone').addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); $('#bulkInput').click(); } });
+  $('#dropZone').onclick = ()=>{ if(!needPerPage()) $('#bulkInput').click(); };
+  $('#dropZone').addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); if(!needPerPage()) $('#bulkInput').click(); } });
   $('#bulkInput').addEventListener('change', e=>{ addBulk(Array.from(e.target.files||[])); e.target.value=''; });
 
   // ----- drag & drop (desktop): anywhere on the page = bulk; onto a set = add to that set -----
@@ -392,7 +416,7 @@
   function render(){
     const host = $('#groups');
     $('#empty').hidden = groups.length>0;
-    $('#btnResplit').hidden = totalPhotos()===0;
+    $('#btnResplit').hidden = perPageVal==null || totalPhotos()===0;
     updateSizeHint();
     $('#hdrCount').textContent = `${totalPhotos()} photos · ${groups.length} set${groups.length===1?'':'s'}`;
     host.innerHTML = groups.map((g,gi)=>`
@@ -612,12 +636,12 @@
   };
 
   // ---------- init ----------
-  if(window.matchMedia && matchMedia('(pointer:coarse)').matches){ $('#dropLabel').innerHTML = '<b>Tap to choose all photos</b>'; $('#dropExtra').remove(); $('#dragVeil').remove(); }
+  if(window.matchMedia && matchMedia('(pointer:coarse)').matches){ $('#dropLabel').innerHTML = '<b>Tap to choose all photos</b>'; $('#dragVeil').remove(); }
   $('#reportName').value = store.get('reportName','');
   $('#sortBy').value = store.get('sortBy','name');
   $('#quality').value = store.get('quality','high'); if(!$('#quality').value) $('#quality').value='high';
   setFormat(store.get('format','docx'));
-  setPerPage(store.get('perPage',3));
+  setPerPage(null);
   renderPresets(); render();
 })();
 </script>
