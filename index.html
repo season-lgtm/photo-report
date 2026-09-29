@@ -15,6 +15,7 @@
     --radius:14px;
   }
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
   header{background:var(--brand);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 18px 14px;position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px}
   header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
@@ -44,7 +45,7 @@
   .group-head input{flex:1;font-weight:600}
   .group-tools{display:flex;gap:4px;flex:0 0 auto}
   .group-tools button{padding:6px 9px;font-size:15px;line-height:1}
-  .thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
   .thumbs .addph{aspect-ratio:3/4;border:2px dashed #c7cdd6;border-radius:10px;background:#f8fafc;color:var(--accent);font-weight:600;display:grid;place-items:center;font-size:14px;line-height:1.2;text-align:center;padding:6px}
   .thumb{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#dfe3ea}
   .thumb img{width:100%;height:100%;object-fit:cover;display:block}
@@ -53,6 +54,18 @@
   .thumb .acts button{background:rgba(255,255,255,.92);padding:5px 8px;font-size:13px;border-radius:8px;line-height:1}
   .thumb .acts button.del{color:var(--danger)}
   .warn{font-size:12px;color:#b45309;margin-top:6px}
+  .card-title{font-weight:650;margin-bottom:10px}
+  .stepper{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .stepper button{border-radius:0;flex:0 0 44px;padding:0;font-size:20px;background:#eef2f7}
+  .stepper input{flex:1;min-width:0;width:100%;border:0;text-align:center;font:inherit;font-weight:650;padding:11px 4px;background:#fff;color:var(--ink);-moz-appearance:textfield;appearance:textfield}
+  .stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .stepper input:focus{outline:none}
+  .drop{margin-top:12px;border:2px dashed #c7cdd6;border-radius:12px;background:#f8fafc;padding:22px 14px;text-align:center;cursor:pointer;transition:background .12s,border-color .12s}
+  .drop:hover,.drop.over{background:#eff6ff;border-color:var(--accent)}
+  .drop-ico{font-size:28px;line-height:1;margin-bottom:6px}
+  .group.over{outline:3px solid var(--accent);outline-offset:-1px;background:#eff6ff}
+  .dragveil{position:fixed;inset:0;z-index:4;background:rgba(37,99,235,.08);border:3px dashed var(--accent);pointer-events:none;display:grid;place-items:end center;padding-bottom:110px}
+  .dragveil>div{background:var(--accent);color:#fff;padding:8px 14px;border-radius:999px;font-weight:600;font-size:14px}
 
   .fab{position:fixed;left:0;right:0;bottom:0;padding:10px 14px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--bg) 30%);z-index:5}
   .fab .inner{max-width:720px;margin:0 auto;display:flex;gap:10px}
@@ -84,13 +97,42 @@
   <div class="card">
     <label class="lbl" for="reportName">Report name (file name)</label>
     <input type="text" id="reportName" placeholder="e.g. DAB Buzzer Alert System - Jul 2026" autocomplete="off">
-    <div class="hint">Each set = one page: a title plus its photos. Tap <b>Add new set</b>, type the title, then add that set's photos. Any number of sets and any number of photos per set.</div>
+    <div class="hint">Each set = one page: a title plus its photos.</div>
+  </div>
+
+  <div class="card" id="bulkCard">
+    <div class="card-title">Add many photos at once</div>
+    <div class="row">
+      <div>
+        <label class="lbl" for="perPage">Photos per page</label>
+        <div class="stepper">
+          <button type="button" id="ppMinus" aria-label="Fewer">−</button>
+          <input type="number" id="perPage" min="1" max="9" value="3" inputmode="numeric">
+          <button type="button" id="ppPlus" aria-label="More">＋</button>
+        </div>
+      </div>
+      <div>
+        <label class="lbl" for="sortBy">Photo order</label>
+        <select id="sortBy">
+          <option value="name">By file name</option>
+          <option value="time">By date (oldest first)</option>
+          <option value="none">As selected / dropped</option>
+        </select>
+      </div>
+    </div>
+    <div class="drop" id="dropZone" role="button" tabindex="0">
+      <div class="drop-ico">⬇️</div>
+      <div><b>Drag all photos here</b>, or click to choose</div>
+      <div class="hint" style="margin-top:4px">Every <b id="ppHint">3</b> photos become one page. You can also drop photos onto a set below to add them to that set.</div>
+    </div>
+    <button type="button" id="btnResplit" style="width:100%;margin-top:10px" hidden>Re-split all photos into pages of <span id="ppHint2">3</span></button>
+    <input type="file" id="bulkInput" accept="image/*" multiple hidden>
   </div>
 
   <div id="groups"></div>
   <div class="empty" id="empty">
     <div class="big-ico">🗂️</div>
-    No sets yet. Tap <b>Add new set</b> to start.
+    No sets yet. Drop photos above, or tap <b>Add new set</b> to build one by one.
   </div>
   <div style="margin:4px 0 12px">
     <button class="big primary" id="btnAddSet">＋ Add new set</button>
@@ -124,6 +166,8 @@
 </div>
 
 <datalist id="titleList"></datalist>
+
+<div class="dragveil" id="dragVeil" hidden><div>Drop photos to add them</div></div>
 
 <dialog id="presetDlg">
   <div class="dlg">
@@ -200,18 +244,87 @@
   $('#fileInput').addEventListener('change', e=>{ addFiles(Array.from(e.target.files||[]), targetSet); e.target.value=''; });
 
   function addFiles(files, gi){
-    files = files.filter(f=>/^image\//.test(f.type) || /\.(jpe?g|png|heic|webp)$/i.test(f.name));
+    files = files.filter(isImage);
     if(!files.length) return;
     if(gi==null || gi<0 || gi>=groups.length){ groups.push({title:'', photos:[]}); gi = groups.length-1; }
     for(const f of files) groups[gi].photos.push({file:f, url:URL.createObjectURL(f), id:++uid});
     render();
   }
-  window.__app = { addFiles, addSet(title){ groups.push({title:title||'', photos:[]}); render(); return groups.length-1; }, get groups(){ return groups; }, generate, setTitles(list){ list.forEach((t,i)=>{ if(groups[i]) groups[i].title=t; }); render(); } };
+  // ----- bulk add: many photos, split into pages of N -----
+  function perPage(){ const n = parseInt($('#perPage').value,10); return Math.min(9, Math.max(1, isNaN(n)?3:n)); }
+  function setPerPage(n){
+    n = Math.min(9, Math.max(1, n||3));
+    $('#perPage').value = n; $('#ppHint').textContent = n; $('#ppHint2').textContent = n; store.set('perPage', n);
+  }
+  $('#ppMinus').onclick = ()=> setPerPage(perPage()-1);
+  $('#ppPlus').onclick  = ()=> setPerPage(perPage()+1);
+  $('#perPage').addEventListener('change', ()=> setPerPage(perPage()));
+  $('#sortBy').addEventListener('change', e=> store.set('sortBy', e.target.value));
+
+  const isImage = f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|heif|webp)$/i.test(f.name);
+  const stem = f => f.name.replace(/\.[^.]+$/, '');
+  function sortFiles(files){
+    const mode = $('#sortBy').value, arr = files.slice();
+    const byName = (a,b)=> stem(a).localeCompare(stem(b), undefined, {numeric:true, sensitivity:'base'});
+    if(mode==='name') arr.sort(byName);
+    else if(mode==='time') arr.sort((a,b)=> (a.lastModified-b.lastModified) || byName(a,b));
+    return arr;
+  }
+  function addBulk(files){
+    files = sortFiles(files.filter(isImage));
+    if(!files.length) return 0;
+    const n = perPage();
+    // drop empty untitled sets so the new pages follow the existing ones cleanly
+    groups = groups.filter(g=>g.photos.length>0 || g.title.trim());
+    for(let i=0;i<files.length;i+=n){
+      groups.push({ title:'', photos: files.slice(i,i+n).map(f=>({file:f, url:URL.createObjectURL(f), id:++uid})) });
+    }
+    render();
+    return files.length;
+  }
+  function resplit(){
+    const n = perPage(), all = groups.flatMap(g=>g.photos), titles = groups.map(g=>g.title);
+    if(!all.length) return;
+    const out=[];
+    for(let i=0;i<all.length;i+=n) out.push({ title: titles[out.length]||'', photos: all.slice(i,i+n) });
+    groups = out; render();
+  }
+  $('#btnResplit').onclick = ()=>{
+    if(!confirm(`Re-split all ${totalPhotos()} photos into pages of ${perPage()}? Titles stay in order.`)) return;
+    resplit();
+  };
+  $('#dropZone').onclick = ()=> $('#bulkInput').click();
+  $('#dropZone').addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); $('#bulkInput').click(); } });
+  $('#bulkInput').addEventListener('change', e=>{ addBulk(Array.from(e.target.files||[])); e.target.value=''; });
+
+  // ----- drag & drop (desktop): anywhere on the page = bulk; onto a set = add to that set -----
+  const hasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types||[]).includes('Files');
+  let dragDepth = 0;
+  function clearOver(){ document.querySelectorAll('.over').forEach(el=>el.classList.remove('over')); }
+  function endDrag(){ dragDepth=0; $('#dragVeil').hidden=true; clearOver(); }
+  window.addEventListener('dragenter', e=>{ if(!hasFiles(e)) return; e.preventDefault(); dragDepth++; $('#dragVeil').hidden=false; });
+  window.addEventListener('dragleave', e=>{ if(!hasFiles(e)) return; dragDepth=Math.max(0,dragDepth-1); if(!dragDepth) endDrag(); });
+  window.addEventListener('dragover', e=>{
+    if(!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect='copy';
+    clearOver();
+    const set = e.target.closest && e.target.closest('.group');
+    (set || $('#dropZone')).classList.add('over');
+  });
+  window.addEventListener('drop', e=>{
+    if(!hasFiles(e)) return; e.preventDefault();
+    const files = Array.from(e.dataTransfer.files||[]);
+    const set = e.target.closest && e.target.closest('.group');
+    endDrag();
+    if(set) addFiles(sortFiles(files), +set.dataset.g); else addBulk(files);
+  });
+
+  window.__app = { addFiles, addBulk, resplit, setPerPage, addSet(title){ groups.push({title:title||'', photos:[]}); render(); return groups.length-1; }, get groups(){ return groups; }, generate, setTitles(list){ list.forEach((t,i)=>{ if(groups[i]) groups[i].title=t; }); render(); } };
 
   // ---------- render ----------
   function render(){
     const host = $('#groups');
     $('#empty').hidden = groups.length>0;
+    $('#btnResplit').hidden = totalPhotos()===0;
     $('#hdrCount').textContent = `${totalPhotos()} photos · ${groups.length} set${groups.length===1?'':'s'}`;
     host.innerHTML = groups.map((g,gi)=>`
       <div class="card group" data-g="${gi}">
@@ -367,6 +480,8 @@
 
   // ---------- init ----------
   $('#reportName').value = store.get('reportName','');
+  $('#sortBy').value = store.get('sortBy','name');
+  setPerPage(store.get('perPage',3));
   renderPresets(); render();
 })();
 </script>
