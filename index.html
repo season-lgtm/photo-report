@@ -49,6 +49,7 @@
   .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
   .thumbs .addph{aspect-ratio:3/4;border:2px dashed #c7cdd6;border-radius:10px;background:#f8fafc;color:var(--accent);font-weight:600;display:grid;place-items:center;font-size:14px;line-height:1.2;text-align:center;padding:6px}
   .thumb{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#dfe3ea}
+  .thumb .pic{width:100%;height:100%}
   .thumb img{width:100%;height:100%;object-fit:cover;display:block}
   .thumb .idx{position:absolute;left:6px;top:6px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:2px 6px;border-radius:999px}
   .thumb .acts{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;background:linear-gradient(transparent,rgba(0,0,0,.6));padding:18px 4px 4px}
@@ -60,6 +61,9 @@
   .card-title{font-weight:650;margin-bottom:10px}
   .chips{display:grid;grid-template-columns:repeat(9,1fr);gap:6px}
   .chips button{padding:11px 0;background:#eef2f7;font-weight:650}
+  .more-pp{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+  .more-pp input{width:110px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);text-align:center;font-weight:650}
+  .more-pp input.on{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:-1px}
   .chips button.on{background:var(--accent);color:#fff}
   .chips.need button{outline:2px solid #f59e0b;outline-offset:-2px}
   .req{color:#b45309;font-weight:600}
@@ -126,6 +130,11 @@
       <button type="button" data-n="1">1</button><button type="button" data-n="2">2</button><button type="button" data-n="3">3</button>
       <button type="button" data-n="4">4</button><button type="button" data-n="5">5</button><button type="button" data-n="6">6</button>
       <button type="button" data-n="7">7</button><button type="button" data-n="8">8</button><button type="button" data-n="9">9</button>
+    </div>
+    <div class="more-pp">
+      <label for="ppOther">More than 9:</label>
+      <input type="number" id="ppOther" min="10" max="30" inputmode="numeric" placeholder="10 to 30">
+      <span class="hint" style="margin:0">photos per page</span>
     </div>
     <div style="margin-top:10px">
       <label class="lbl" for="sortBy">Photo order</label>
@@ -195,7 +204,7 @@
     <div class="hint">On iPhone, Download opens a preview. Use the share icon there to save to Files or send on WhatsApp.</div>
   </div>
 
-  <footer>One set per page · A4 · Word or PDF · <span id="ver">version 8</span></footer>
+  <footer>One set per page · A4 · Word or PDF · <span id="ver">version 9</span></footer>
 </main>
 
 <div class="fab">
@@ -242,7 +251,20 @@
   //   5 or more      : small, 3 per row  (6 photos = 3 + 3, as in the original)
   const LAYOUT_LARGE = { w: 2.90, h: 3.87, perRow: 2 };
   const LAYOUT_SMALL = { w: 2.05, h: 2.73, perRow: 3 };
-  const layoutFor = n => n <= 4 ? LAYOUT_LARGE : LAYOUT_SMALL;
+  // 10 or more: pick the column count that gives the biggest photos while the whole set still fits one page
+  const TEXT_W = 6.27, TEXT_H = 8.70, GAP = 0.03;
+  function layoutFor(n){
+    if(n <= 4) return LAYOUT_LARGE;
+    if(n <= 9) return LAYOUT_SMALL;
+    let best = null;
+    for(let c=3; c<=6; c++){
+      const rows = Math.ceil(n/c);
+      const w = Math.min(TEXT_W/c - GAP, (TEXT_H/rows - GAP) * 0.75);
+      if(!best || w > best.w + 1e-6) best = { w, perRow:c };
+    }
+    const w = Math.floor(best.w*100)/100;
+    return { w, h: Math.round(w/0.75*100)/100, perRow: best.perRow };
+  }
   // File size presets: longest side in pixels + JPEG quality. Photos print at most 2.9 x 3.9 inches,
   // so even "Compressed" stays sharp enough to read the service sticker.
   const QUALITY = {
@@ -309,7 +331,8 @@
   function perPage(){ return perPageVal; }
   function setPerPage(n){
     n = parseInt(n,10);
-    perPageVal = (isNaN(n) || n<1) ? null : Math.min(9, n);
+    perPageVal = (isNaN(n) || n<1) ? null : Math.min(30, n);
+    const other=$('#ppOther'); other.classList.toggle('on', perPageVal!=null && perPageVal>9); if(perPageVal==null || perPageVal<=9) other.value=''; else other.value=perPageVal;
     document.querySelectorAll('#ppChips button').forEach(b=> b.classList.toggle('on', +b.dataset.n===perPageVal));
     $('#ppChips').classList.remove('need');
     $('#ppReq').hidden = perPageVal!=null;
@@ -327,6 +350,7 @@
     setStatus('Choose the number of photos per page first.');
     return true;
   }
+  $('#ppOther').addEventListener('change', e=>{ const v=parseInt(e.target.value,10); if(isNaN(v)){ return; } setPerPage(Math.max(1,v)); setStatus(''); });
   $('#ppChips').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b){ setPerPage(b.dataset.n); setStatus(''); } });
   $('#sortBy').addEventListener('change', e=> store.set('sortBy', e.target.value));
 
@@ -351,13 +375,53 @@
     const blob = await convert({ blob:file, type:'image/jpeg', quality:0.9 });
     return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type:'image/jpeg', lastModified:file.lastModified });
   }
+  // Run at most n heavy jobs at once (HEIC conversion is slow and memory hungry)
+  function limiter(n){
+    let active=0; const q=[];
+    const next=()=>{ if(active<n && q.length){ active++; const j=q.shift(); j.fn().then(j.res, j.rej).then(()=>{ active--; next(); }); } };
+    return fn => new Promise((res,rej)=>{ q.push({fn,res,rej}); next(); });
+  }
+  const heicLimit = limiter(2);
+  // Small previews are made a few at a time, so hundreds of photos do not freeze the page
+  const THUMB_W = 240, thumbQ = []; let thumbBusy = 0;
+  function queueThumb(p){ thumbQ.push(p); pumpThumbs(); }
+  function pumpThumbs(){
+    while(thumbBusy < 3 && thumbQ.length){
+      const p = thumbQ.shift(); thumbBusy++;
+      makeThumb(p).catch(()=>{}).then(()=>{ thumbBusy--; pumpThumbs(); });
+    }
+  }
+  async function makeThumb(p){
+    await p.ready; if(p.error || p.removed) return;
+    let src, sw, sh, bmp=null;
+    try{ bmp = await createImageBitmap(p.file, { imageOrientation:'from-image', resizeWidth:THUMB_W, resizeQuality:'low' }); src=bmp; sw=bmp.width; sh=bmp.height; }
+    catch(e){
+      try{ bmp = await createImageBitmap(p.file); src=bmp; sw=bmp.width; sh=bmp.height; }
+      catch(e2){ try{ src = await loadImage(p.file); sw=src.naturalWidth; sh=src.naturalHeight; }catch(e3){ p.error='Cannot read this photo'; paintThumb(p); return; } }
+    }
+    const k = Math.min(1, THUMB_W/sw), cw=Math.max(1,Math.round(sw*k)), ch=Math.max(1,Math.round(sh*k));
+    const cv=document.createElement('canvas'); cv.width=cw; cv.height=ch; cv.getContext('2d').drawImage(src,0,0,cw,ch);
+    if(bmp) bmp.close(); else if(src && src.src) URL.revokeObjectURL(src.src);
+    const blob = await new Promise(r=>cv.toBlob(r,'image/jpeg',0.7));
+    p.thumb = URL.createObjectURL(blob);
+    paintThumb(p);
+  }
+  function thumbInner(p){
+    return p.thumb ? `<img src="${p.thumb}" alt="" loading="lazy" decoding="async">`
+         : `<div class="ph ${p.error?'err':''}">${p.error ? '⚠️<br>Cannot read<br>this photo' : (p.pending ? 'Converting<br>HEIC…' : 'Loading…')}</div>`;
+  }
+  function paintThumb(p){
+    const el = document.querySelector(`.thumb[data-pid="${p.id}"] .pic`);
+    if(el) el.innerHTML = thumbInner(p);
+  }
   function makePhoto(f){
     const p = { file:f, url:'', id:++uid, pending:false, error:'' };
-    if(!isHeic(f)){ p.url = URL.createObjectURL(f); p.ready = Promise.resolve(); return p; }
+    if(!isHeic(f)){ p.ready = Promise.resolve(); queueThumb(p); return p; }
     p.pending = true;
-    p.ready = heicToJpeg(f).then(j=>{ p.file=j; p.url=URL.createObjectURL(j); })
+    p.ready = heicLimit(()=>heicToJpeg(f)).then(j=>{ p.file=j; })
       .catch(e=>{ p.error = (e && e.message) || 'Cannot read this HEIC photo'; })
-      .then(()=>{ p.pending=false; render(); });
+      .then(()=>{ p.pending=false; paintThumb(p); });
+    queueThumb(p);
     return p;
   }
 
@@ -442,8 +506,8 @@
         </div>
         <div class="thumbs">
           ${g.photos.map((p,pi)=>`
-            <div class="thumb">
-              ${p.url ? `<img src="${p.url}" alt="">` : `<div class="ph ${p.error?'err':''}">${p.error ? '⚠️<br>Cannot read<br>this photo' : 'Converting<br>HEIC…'}</div>`}
+            <div class="thumb" data-pid="${p.id}">
+              <div class="pic">${thumbInner(p)}</div>
               <span class="idx">${pi+1}</span>
               <div class="acts">
                 <button data-act="left" data-g="${gi}" data-p="${pi}" title="Move earlier" ${pi===0?'disabled':''}>◀</button>
@@ -453,7 +517,7 @@
             </div>`).join('')}
           <button class="addph" data-act="pick" data-g="${gi}">＋<br>Add photos</button>
         </div>
-        <div class="hint">${g.photos.length===0 ? 'No photos yet.' : g.photos.length<=4 ? `${g.photos.length} photo${g.photos.length===1?'':'s'} · large, 2 per row` : `${g.photos.length} photos · small, 3 per row`}</div>
+        <div class="hint">${g.photos.length===0 ? 'No photos yet.' : `${g.photos.length} photo${g.photos.length===1?'':'s'} · ${layoutFor(g.photos.length).perRow} per row on the page`}${g.photos.length>30 ? ' · <span style="color:#b45309">more than 30 will run onto a second page</span>' : ''}</div>
       </div>`).join('');
   }
 
@@ -467,7 +531,7 @@
     if(act==='delg'){ if(groups[gi].photos.length && !confirm('Remove this set and its photos?')) return; groups.splice(gi,1); }
     else if(act==='up' && gi>0){ [groups[gi-1],groups[gi]]=[groups[gi],groups[gi-1]]; }
     else if(act==='down' && gi<groups.length-1){ [groups[gi+1],groups[gi]]=[groups[gi],groups[gi+1]]; }
-    else if(act==='delp'){ groups[gi].photos.splice(pi,1); }
+    else if(act==='delp'){ const [gone]=groups[gi].photos.splice(pi,1); if(gone){ gone.removed=true; if(gone.thumb) URL.revokeObjectURL(gone.thumb); } }
     else if(act==='left' && pi>0){ const ph=groups[gi].photos; [ph[pi-1],ph[pi]]=[ph[pi],ph[pi-1]]; }
     else if(act==='right' && pi<groups[gi].photos.length-1){ const ph=groups[gi].photos; [ph[pi+1],ph[pi]]=[ph[pi],ph[pi+1]]; }
     render();
@@ -476,7 +540,8 @@
 
   $('#btnClear').onclick = ()=>{
     if(groups.length && !confirm('Clear all sets and photos?')) return;
-    groups.forEach(g=>g.photos.forEach(p=>URL.revokeObjectURL(p.url)));
+    groups.forEach(g=>g.photos.forEach(p=>{ p.removed=true; if(p.thumb) URL.revokeObjectURL(p.thumb); }));
+    thumbQ.length = 0;
     groups=[]; lastBlob=null; $('#doneCard').hidden=true; setStatus(''); render();
   };
 
@@ -600,7 +665,8 @@
         const runs = pg.imgs.slice(i,i+pg.lay.perRow).map(img=> new ImageRun({ type:'jpg', data:img.data, transformation:{ width:Math.round(pg.lay.w*96), height:Math.round(pg.lay.h*96) } }));
         children.push(new Paragraph({ keepNext:true, spacing:{after:0}, children:runs }));
       }
-      if(gi<pages.length-1) children.push(new Paragraph({ children:[ new PageBreak() ] }));
+      // page break in its own small paragraph; layouts leave room for it so it never spills onto a blank page
+      if(gi<pages.length-1) children.push(new Paragraph({ spacing:{before:0, after:0}, children:[ new PageBreak() ] }));
     });
     const doc = new Document({
       styles:{ default:{ document:{ run:{ font:'Calibri', size:22 } } } },
@@ -623,7 +689,7 @@
     // Same page as the Word version: A4, 1 inch margins, bold 14pt title, photos at the same sizes
     const jsPDF = window.jspdf.jsPDF;
     const pdf = new jsPDF({ unit:'in', format:'a4', orientation:'portrait', compress:true });
-    const M=1, PAGE_H=11.69, GAP=0.03; let n=0;
+    const M=1, PAGE_H=11.69; let n=0;
     pages.forEach((pg,gi)=>{
       if(gi>0) pdf.addPage();
       pdf.setFont('helvetica','bold'); pdf.setFontSize(14); pdf.setTextColor(0,0,0);
