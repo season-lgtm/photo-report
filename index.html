@@ -21,7 +21,7 @@
   header{background:var(--brand);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 18px 14px;position:sticky;top:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px}
   header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
   header .count{font-size:13px;opacity:.8;white-space:nowrap}
-  main{max-width:720px;margin:0 auto;padding:16px 14px calc(110px + env(safe-area-inset-bottom))}
+  main{max-width:720px;margin:0 auto;padding:16px 14px calc(150px + env(safe-area-inset-bottom))}
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:12px}
   label.lbl{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
   input[type=text],select{width:100%;font:inherit;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
@@ -58,6 +58,9 @@
   .thumb .ph{width:100%;height:100%;display:grid;place-items:center;text-align:center;font-size:12px;color:var(--muted);padding:6px 6px 30px;line-height:1.3}
   .thumb .ph.err{color:var(--danger);background:#fef2f2}
   .card-title{font-weight:650;margin-bottom:10px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#eef2f7}
+  .seg button{flex:1;border-radius:0;background:transparent;padding:11px 8px;color:var(--muted)}
+  .seg button.on{background:var(--accent);color:#fff}
   .stepper{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
   .stepper button{border-radius:0;flex:0 0 44px;padding:0;font-size:20px;background:#eef2f7}
   .stepper input{flex:1;min-width:0;width:100%;border:0;text-align:center;font:inherit;font-weight:650;padding:11px 4px;background:#fff;color:var(--ink);-moz-appearance:textfield;appearance:textfield}
@@ -132,6 +135,28 @@
     <input type="file" id="bulkInput" accept="image/*,.heic,.heif" multiple hidden>
   </div>
 
+  <div class="card" id="outCard">
+    <div class="card-title">Output</div>
+    <div class="row">
+      <div>
+        <label class="lbl">File type</label>
+        <div class="seg" id="fmtSeg" role="group" aria-label="File type">
+          <button type="button" data-fmt="docx">Word</button>
+          <button type="button" data-fmt="pdf">PDF</button>
+        </div>
+      </div>
+      <div>
+        <label class="lbl" for="quality">File size</label>
+        <select id="quality">
+          <option value="high">Best quality (largest)</option>
+          <option value="medium">Standard</option>
+          <option value="small">Compressed (smallest)</option>
+        </select>
+      </div>
+    </div>
+    <div class="hint" id="sizeHint"></div>
+  </div>
+
   <div id="groups"></div>
   <div class="empty" id="empty">
     <div class="big-ico">🗂️</div>
@@ -156,7 +181,7 @@
     <div class="hint">On iPhone, Download opens a preview. Use the share icon there to save to Files or send on WhatsApp.</div>
   </div>
 
-  <footer>One set per page · A4 · Word (.docx) · <span id="ver">version 5</span></footer>
+  <footer>One set per page · A4 · Word or PDF · <span id="ver">version 6</span></footer>
 </main>
 
 <div class="fab">
@@ -204,7 +229,16 @@
   const LAYOUT_LARGE = { w: 2.90, h: 3.87, perRow: 2 };
   const LAYOUT_SMALL = { w: 2.05, h: 2.73, perRow: 3 };
   const layoutFor = n => n <= 4 ? LAYOUT_LARGE : LAYOUT_SMALL;
-  const MAX_PX = { w: 1200, h: 1600 };
+  // File size presets: longest side in pixels + JPEG quality. Photos print at most 2.9 x 3.9 inches,
+  // so even "Compressed" stays sharp enough to read the service sticker.
+  const QUALITY = {
+    high:   { w:1200, h:1600, q:0.86, label:'Best quality' },
+    medium: { w: 900, h:1200, q:0.72, label:'Standard' },
+    small:  { w: 660, h: 880, q:0.55, label:'Compressed' },
+  };
+  const JSPDF_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+  const MIME = { docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', pdf:'application/pdf' };
+  let format = 'docx';
 
   // ---------- state ----------
   let groups = [];          // [{title, photos:[{file,url,id}]}]
@@ -352,13 +386,14 @@
     if(set) addFiles(sortFiles(files), +set.dataset.g); else addBulk(files);
   });
 
-  window.__app = { addFiles, addBulk, resplit, setPerPage, addSet(title){ groups.push({title:title||'', photos:[]}); render(); return groups.length-1; }, get groups(){ return groups; }, generate, setTitles(list){ list.forEach((t,i)=>{ if(groups[i]) groups[i].title=t; }); render(); } };
+  window.__app = { addFiles, addBulk, resplit, setPerPage, setFormat, setQuality(q){ $('#quality').value=q; updateSizeHint(); }, addSet(title){ groups.push({title:title||'', photos:[]}); render(); return groups.length-1; }, get groups(){ return groups; }, generate, setTitles(list){ list.forEach((t,i)=>{ if(groups[i]) groups[i].title=t; }); render(); } };
 
   // ---------- render ----------
   function render(){
     const host = $('#groups');
     $('#empty').hidden = groups.length>0;
     $('#btnResplit').hidden = totalPhotos()===0;
+    updateSizeHint();
     $('#hdrCount').textContent = `${totalPhotos()} photos · ${groups.length} set${groups.length===1?'':'s'}`;
     host.innerHTML = groups.map((g,gi)=>`
       <div class="card group" data-g="${gi}">
@@ -433,7 +468,7 @@
       img.src = URL.createObjectURL(file);
     });
   }
-  async function toJpeg(file, ratio){
+  async function toJpeg(file, ratio, MAX_PX){
     // returns {data:ArrayBuffer} cropped to the target aspect ratio (w/h), max 1200x1600
     let src, sw, sh, bitmap=null;
     try{
@@ -450,7 +485,7 @@
     const canvas = document.createElement('canvas'); canvas.width=ow; canvas.height=oh;
     canvas.getContext('2d').drawImage(src, cx, cy, cw, ch, 0, 0, ow, oh);
     if(bitmap) bitmap.close();
-    const blob = await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.86));
+    const blob = await new Promise(r=>canvas.toBlob(r,'image/jpeg',MAX_PX.q));
     return { data: await blob.arrayBuffer(), w: ow, h: oh };
   }
 
@@ -462,7 +497,6 @@
     if(noPhotos>=0){ alert(`Set ${noPhotos+1} has no photos. Add photos or remove the set.`); render(); return; }
     const missing = groups.findIndex(g=>!g.title.trim());
     if(missing>=0 && !confirm(`Set ${missing+1} has no title. Generate anyway?`)) return;
-    const { Document, Packer, Paragraph, TextRun, ImageRun, PageBreak } = docx;
     if(groups.some(g=>g.photos.some(p=>p.pending))){
       setStatus('Converting HEIC photos…');
       await Promise.all(groups.flatMap(g=>g.photos.map(p=>p.ready)));
@@ -471,33 +505,26 @@
     if(badSet>=0){ setStatus(''); alert(`Set ${badSet+1} has a photo that cannot be read. Remove it (red tile) and try again.`); return; }
     const btn=$('#btnGenerate'); btn.disabled=true; $('#doneCard').hidden=true; lastBlob=null;
     setProgress(0); setStatus('Preparing photos…');
+    const fmt = format, preset = QUALITY[$('#quality').value] || QUALITY.high;
     try{
-      const children=[]; const total=totalPhotos(); let done=0;
-      for(let gi=0; gi<groups.length; gi++){
-        const g=groups[gi];
-        const lay = layoutFor(g.photos.length);
-        children.push(new Paragraph({ keepNext:true, children:[ new TextRun({ text:g.title.trim(), bold:true, size:28, font:'Calibri' }) ] }));
-        for(let i=0;i<g.photos.length;i+=lay.perRow){
-          const runs=[];
-          for(const p of g.photos.slice(i,i+lay.perRow)){
-            const img = await toJpeg(p.file, lay.w/lay.h);
-            runs.push(new ImageRun({ type:'jpg', data:img.data, transformation:{ width:Math.round(lay.w*96), height:Math.round(lay.h*96) } }));
-            done++; setProgress(done/total); setStatus(`Processing photo ${done} of ${total}…`);
-          }
-          children.push(new Paragraph({ keepNext:true, spacing:{after:0}, children:runs }));
+      if(fmt==='pdf') await loadJsPdf();
+      // 1) prepare every photo once (crop + resize + compress)
+      const total=totalPhotos(); let done=0; const pages=[];
+      for(const g of groups){
+        const lay = layoutFor(g.photos.length), imgs=[];
+        for(const p of g.photos){
+          imgs.push(await toJpeg(p.file, lay.w/lay.h, preset));
+          done++; setProgress(done/total); setStatus(`Processing photo ${done} of ${total}…`);
         }
-        if(gi<groups.length-1) children.push(new Paragraph({ children:[ new PageBreak() ] }));
+        pages.push({ title:g.title.trim(), lay, imgs });
       }
-      setStatus('Building Word file…');
-      const doc = new Document({
-        styles:{ default:{ document:{ run:{ font:'Calibri', size:22 } } } },
-        sections:[{ properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:1440, right:1440, bottom:1440, left:1440 } } }, children }]
-      });
-      lastBlob = await Packer.toBlob(doc);
-      lastName = (($('#reportName').value||'').trim() || 'Photo Report') + '.docx';
+      // 2) build the file
+      setStatus(fmt==='pdf' ? 'Building PDF file…' : 'Building Word file…');
+      lastBlob = fmt==='pdf' ? buildPdf(pages) : await buildDocx(pages);
+      lastName = (($('#reportName').value||'').trim() || 'Photo Report') + '.' + fmt;
       window.__lastBlob = lastBlob; window.__lastName = lastName;
-      $('#doneName').textContent = lastName + ' · ' + (lastBlob.size/1048576).toFixed(1) + ' MB';
-      const canShare = !!(navigator.canShare && navigator.canShare({ files:[new File([lastBlob], lastName, {type:lastBlob.type})] }));
+      $('#doneName').textContent = lastName + ' · ' + fmtSize(lastBlob.size) + ' · ' + preset.label;
+      const canShare = !!(navigator.canShare && navigator.canShare({ files:[new File([lastBlob], lastName, {type:MIME[fmt]})] }));
       $('#btnShare').hidden = !canShare;
       $('#doneCard').hidden=false; setStatus('Done.'); setProgress(null);
       $('#doneCard').scrollIntoView({behavior:'smooth', block:'center'});
@@ -505,6 +532,72 @@
       console.error(err); setProgress(null); setStatus('Error: '+(err.message||err)); alert('Could not generate the file: '+(err.message||err));
     }finally{ btn.disabled=false; }
   }
+  function fmtSize(n){ return n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB'; }
+
+  async function buildDocx(pages){
+    const { Document, Packer, Paragraph, TextRun, ImageRun, PageBreak } = docx;
+    const children=[];
+    pages.forEach((pg,gi)=>{
+      children.push(new Paragraph({ keepNext:true, children:[ new TextRun({ text:pg.title, bold:true, size:28, font:'Calibri' }) ] }));
+      for(let i=0;i<pg.imgs.length;i+=pg.lay.perRow){
+        const runs = pg.imgs.slice(i,i+pg.lay.perRow).map(img=> new ImageRun({ type:'jpg', data:img.data, transformation:{ width:Math.round(pg.lay.w*96), height:Math.round(pg.lay.h*96) } }));
+        children.push(new Paragraph({ keepNext:true, spacing:{after:0}, children:runs }));
+      }
+      if(gi<pages.length-1) children.push(new Paragraph({ children:[ new PageBreak() ] }));
+    });
+    const doc = new Document({
+      styles:{ default:{ document:{ run:{ font:'Calibri', size:22 } } } },
+      sections:[{ properties:{ page:{ size:{ width:11906, height:16838 }, margin:{ top:1440, right:1440, bottom:1440, left:1440 } } }, children }]
+    });
+    return Packer.toBlob(doc);
+  }
+
+  let jsPdfLib = null;
+  function loadJsPdf(){
+    if(!jsPdfLib) jsPdfLib = new Promise((res,rej)=>{
+      const sc=document.createElement('script'); sc.src=JSPDF_LIB;
+      sc.onload=()=> (window.jspdf && window.jspdf.jsPDF) ? res(window.jspdf.jsPDF) : rej(new Error('PDF builder failed to start'));
+      sc.onerror=()=>{ jsPdfLib=null; rej(new Error('Could not load the PDF builder. Check the internet connection.')); };
+      document.head.appendChild(sc);
+    });
+    return jsPdfLib;
+  }
+  function buildPdf(pages){
+    // Same page as the Word version: A4, 1 inch margins, bold 14pt title, photos at the same sizes
+    const jsPDF = window.jspdf.jsPDF;
+    const pdf = new jsPDF({ unit:'in', format:'a4', orientation:'portrait', compress:true });
+    const M=1, PAGE_H=11.69, GAP=0.03; let n=0;
+    pages.forEach((pg,gi)=>{
+      if(gi>0) pdf.addPage();
+      pdf.setFont('helvetica','bold'); pdf.setFontSize(14); pdf.setTextColor(0,0,0);
+      pdf.text(pg.title || ' ', M, M+0.16);
+      let y = M+0.32;
+      for(let i=0;i<pg.imgs.length;i+=pg.lay.perRow){
+        if(y + pg.lay.h > PAGE_H - M + 0.01){ pdf.addPage(); y = M; }
+        pg.imgs.slice(i,i+pg.lay.perRow).forEach((img,k)=>{
+          pdf.addImage(new Uint8Array(img.data), 'JPEG', M + k*(pg.lay.w+GAP), y, pg.lay.w, pg.lay.h, 'p'+(++n), 'NONE');
+        });
+        y += pg.lay.h + GAP;
+      }
+    });
+    return pdf.output('blob');
+  }
+
+  // ----- output options -----
+  function setFormat(f){
+    format = f==='pdf' ? 'pdf' : 'docx'; store.set('format', format);
+    document.querySelectorAll('#fmtSeg button').forEach(b=> b.classList.toggle('on', b.dataset.fmt===format));
+    $('#btnGenerate').textContent = format==='pdf' ? 'Generate PDF' : 'Generate Word';
+    updateSizeHint();
+  }
+  function updateSizeHint(){
+    const n = totalPhotos(), q = $('#quality').value;
+    const per = { high:0.25, medium:0.10, small:0.045 }[q] || 0.25;   // typical MB per photo, measured on site photos
+    $('#sizeHint').textContent = n ? `About ${fmtSize(Math.max(0.05, n*per)*1048576)} for ${n} photo${n===1?'':'s'}. The exact size shows after generating.`
+                                   : 'Choose Compressed if the file is too big to send by email or WhatsApp.';
+  }
+  $('#fmtSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) setFormat(b.dataset.fmt); });
+  $('#quality').addEventListener('change', e=>{ store.set('quality', e.target.value); updateSizeHint(); });
   $('#btnGenerate').onclick = generate;
 
   $('#btnDownload').onclick = ()=>{
@@ -514,7 +607,7 @@
   };
   $('#btnShare').onclick = async ()=>{
     if(!lastBlob) return;
-    const f = new File([lastBlob], lastName, { type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const f = new File([lastBlob], lastName, { type: /\.pdf$/i.test(lastName) ? MIME.pdf : MIME.docx });
     try{ await navigator.share({ files:[f], title:lastName }); }catch(e){ /* user cancelled */ }
   };
 
@@ -522,6 +615,8 @@
   if(window.matchMedia && matchMedia('(pointer:coarse)').matches){ $('#dropLabel').innerHTML = '<b>Tap to choose all photos</b>'; $('#dropExtra').remove(); $('#dragVeil').remove(); }
   $('#reportName').value = store.get('reportName','');
   $('#sortBy').value = store.get('sortBy','name');
+  $('#quality').value = store.get('quality','high'); if(!$('#quality').value) $('#quality').value='high';
+  setFormat(store.get('format','docx'));
   setPerPage(store.get('perPage',3));
   renderPresets(); render();
 })();
