@@ -93,6 +93,9 @@
   .done .fname{font-weight:650;word-break:break-all}
   .done .btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
   .done .btns button{flex:1}
+  .done .compress{margin-top:10px;padding-top:10px;border-top:1px solid #bbf7d0}
+  .done .compress button{width:100%;background:#fff;border:1px solid #bbf7d0}
+  .done .compress .hint{margin-top:6px}
   footer{text-align:center;color:var(--muted);font-size:12px;padding:20px 0 0}
   dialog{border:0;border-radius:16px;padding:0;max-width:92vw;width:420px}
   dialog::backdrop{background:rgba(0,0,0,.4)}
@@ -156,7 +159,8 @@
         <select id="quality">
           <option value="high">Best quality (largest)</option>
           <option value="medium">Standard</option>
-          <option value="small">Compressed (smallest)</option>
+          <option value="small">Compressed</option>
+          <option value="tiny">Extra compressed (smallest)</option>
         </select>
       </div>
     </div>
@@ -184,10 +188,14 @@
       <button class="primary" id="btnDownload">⬇️ Download</button>
       <button id="btnShare" hidden>📤 Share</button>
     </div>
+    <div class="compress">
+      <button id="btnCompress">🗜️ Compress report</button>
+      <div class="hint" id="compressNote"></div>
+    </div>
     <div class="hint">On iPhone, Download opens a preview. Use the share icon there to save to Files or send on WhatsApp.</div>
   </div>
 
-  <footer>One set per page · A4 · Word or PDF · <span id="ver">version 7</span></footer>
+  <footer>One set per page · A4 · Word or PDF · <span id="ver">version 8</span></footer>
 </main>
 
 <div class="fab">
@@ -241,7 +249,9 @@
     high:   { w:1200, h:1600, q:0.86, label:'Best quality' },
     medium: { w: 900, h:1200, q:0.72, label:'Standard' },
     small:  { w: 660, h: 880, q:0.55, label:'Compressed' },
+    tiny:   { w: 520, h: 694, q:0.45, label:'Extra compressed' },
   };
+  const QUALITY_ORDER = ['high','medium','small','tiny'];
   const JSPDF_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
   const MIME = { docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', pdf:'application/pdf' };
   let format = 'docx';
@@ -514,6 +524,7 @@
   }
 
   // ---------- docx ----------
+  let prevSize = 0;   // size before the last Compress click, for the before/after note
   async function generate(){
     groups = groups.filter(g=>g.photos.length>0 || g.title.trim());
     if(!groups.length){ alert('Add a set with some photos first.'); return; }
@@ -548,6 +559,7 @@
       lastName = (($('#reportName').value||'').trim() || 'Photo Report') + '.' + fmt;
       window.__lastBlob = lastBlob; window.__lastName = lastName;
       $('#doneName').textContent = lastName + ' · ' + fmtSize(lastBlob.size) + ' · ' + preset.label;
+      updateCompress();
       const canShare = !!(navigator.canShare && navigator.canShare({ files:[new File([lastBlob], lastName, {type:MIME[fmt]})] }));
       $('#btnShare').hidden = !canShare;
       $('#doneCard').hidden=false; setStatus('Done.'); setProgress(null);
@@ -556,6 +568,27 @@
       console.error(err); setProgress(null); setStatus('Error: '+(err.message||err)); alert('Could not generate the file: '+(err.message||err));
     }finally{ btn.disabled=false; }
   }
+  function nextQuality(){ const i = QUALITY_ORDER.indexOf($('#quality').value); return (i>=0 && i<QUALITY_ORDER.length-1) ? QUALITY_ORDER[i+1] : null; }
+  function updateCompress(){
+    const nq = nextQuality(), btn = $('#btnCompress');
+    btn.disabled = !nq;
+    btn.textContent = nq ? `🗜️ Compress report (${QUALITY[nq].label})` : '🗜️ Already at the smallest size';
+    let note = '';
+    if(prevSize && lastBlob){
+      const saved = Math.round((1 - lastBlob.size/prevSize)*100);
+      note = `Compressed from ${fmtSize(prevSize)} to ${fmtSize(lastBlob.size)}` + (saved>0 ? ` (${saved}% smaller). ` : '. ');
+    }
+    note += nq ? 'File too big? Tap Compress to make it smaller.' : 'This is the smallest size available.';
+    $('#compressNote').textContent = note;
+  }
+  $('#btnCompress').onclick = async ()=>{
+    const nq = nextQuality(); if(!nq || !lastBlob) return;
+    const before = lastBlob.size, oldQ = $('#quality').value;
+    $('#quality').value = nq; store.set('quality', nq); updateSizeHint();
+    prevSize = before;
+    await generate();
+    if(!lastBlob){ $('#quality').value = oldQ; store.set('quality', oldQ); updateSizeHint(); prevSize = 0; }
+  };
   function fmtSize(n){ return n>=1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1,Math.round(n/1024))+' KB'; }
 
   async function buildDocx(pages){
@@ -616,13 +649,13 @@
   }
   function updateSizeHint(){
     const n = totalPhotos(), q = $('#quality').value;
-    const per = { high:0.25, medium:0.10, small:0.045 }[q] || 0.25;   // typical MB per photo, measured on site photos
+    const per = { high:0.25, medium:0.10, small:0.045, tiny:0.028 }[q] || 0.25;   // typical MB per photo, measured on site photos
     $('#sizeHint').textContent = n ? `About ${fmtSize(Math.max(0.05, n*per)*1048576)} for ${n} photo${n===1?'':'s'}. The exact size shows after generating.`
                                    : 'Choose Compressed if the file is too big to send by email or WhatsApp.';
   }
   $('#fmtSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(b) setFormat(b.dataset.fmt); });
   $('#quality').addEventListener('change', e=>{ store.set('quality', e.target.value); updateSizeHint(); });
-  $('#btnGenerate').onclick = generate;
+  $('#btnGenerate').onclick = ()=>{ prevSize = 0; return generate(); };
 
   $('#btnDownload').onclick = ()=>{
     if(!lastBlob) return;
