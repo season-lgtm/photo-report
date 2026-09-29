@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0a1628">
+<meta http-equiv="Cache-Control" content="no-cache">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Photo Report Generator</title>
@@ -123,7 +124,7 @@
     <div class="drop" id="dropZone" role="button" tabindex="0">
       <div class="drop-ico">⬇️</div>
       <div id="dropLabel"><b>Drag all photos here</b>, or click to choose</div>
-      <div class="hint" style="margin-top:4px">Every <b id="ppHint">3</b> photos become one page. You can also drop photos onto a set below to add them to that set.</div>
+      <div class="hint" style="margin-top:4px">Every <b id="ppHint">3</b> photos become one page.<span id="dropExtra"> You can also drop photos onto a set below to add them to that set.</span></div>
     </div>
     <button type="button" id="btnResplit" style="width:100%;margin-top:10px" hidden>Re-split all photos into pages of <span id="ppHint2">3</span></button>
     <input type="file" id="bulkInput" accept="image/*" multiple hidden>
@@ -132,7 +133,7 @@
   <div id="groups"></div>
   <div class="empty" id="empty">
     <div class="big-ico">🗂️</div>
-    No sets yet. Drop photos above, or tap <b>Add new set</b> to build one by one.
+    No sets yet. Choose photos above, or tap <b>Add new set</b> to build one by one.
   </div>
   <div style="margin:4px 0 12px">
     <button class="big primary" id="btnAddSet">＋ Add new set</button>
@@ -153,7 +154,7 @@
     <div class="hint">On iPhone, Download opens a preview. Use the share icon there to save to Files or send on WhatsApp.</div>
   </div>
 
-  <footer>One set per page · A4 · Word (.docx)</footer>
+  <footer>One set per page · A4 · Word (.docx) · <span id="ver">version 4</span></footer>
 </main>
 
 <div class="fab">
@@ -479,7 +480,7 @@
   };
 
   // ---------- init ----------
-  if(window.matchMedia && matchMedia('(pointer:coarse)').matches){ $('#dropLabel').innerHTML = '<b>Tap to choose all photos</b>'; $('#dragVeil').remove(); }
+  if(window.matchMedia && matchMedia('(pointer:coarse)').matches){ $('#dropLabel').innerHTML = '<b>Tap to choose all photos</b>'; $('#dropExtra').remove(); $('#dragVeil').remove(); }
   $('#reportName').value = store.get('reportName','');
   $('#sortBy').value = store.get('sortBy','name');
   setPerPage(store.get('perPage',3));
